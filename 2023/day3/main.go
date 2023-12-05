@@ -27,7 +27,7 @@ func isSymbol(c rune) bool {
 	return c != '.' && (c < '0' || c > '9')
 }
 
-func processLines(prev string, curr string, next string) int {
+func getPartsFromLine(prev string, curr string, next string) int {
 
 	prevR := []rune(prev)
 	currR := []rune(curr)
@@ -51,7 +51,7 @@ func processLines(prev string, curr string, next string) int {
 		isAdjacent := start > 0 && isSymbol(currR[start-1]) || end < len(currr) && isSymbol(currR[end])
 
 		// check row above
-		for isAdjacent == false && i < len(prev) && i < end+1 {
+		for !isAdjacent && i < len(prev) && i < end+1 {
 			if i >= start-1 && isSymbol(prevR[i]) {
 				isAdjacent = true
 				break
@@ -60,7 +60,7 @@ func processLines(prev string, curr string, next string) int {
 		}
 
 		// check row below
-		for isAdjacent == false && j < len(next) && j < end+1 {
+		for !isAdjacent && j < len(next) && j < end+1 {
 			if j >= start-1 && isSymbol(nextR[j]) {
 				isAdjacent = true
 				break
@@ -70,6 +70,73 @@ func processLines(prev string, curr string, next string) int {
 
 		if isAdjacent {
 			result += number
+		}
+	}
+
+	return result
+}
+
+func getGearRatiosFromLine(prev string, curr string, next string) int {
+	// If we find a gear, we check if there is a number:
+	//   - to the left and right of the gear
+	//   - above and below the gear
+
+	re := regexp.MustCompile("[0-9]+")
+	prevMatches := re.FindAllIndex([]byte(prev), -1)
+	nextMatches := re.FindAllIndex([]byte(next), -1)
+
+	j := 0 // index of prevMatch
+	k := 0
+
+	result := 0
+
+	currR := []rune(curr)
+	for i := 0; i < len(currR); i++ {
+		if currR[i] == '*' {
+
+			matches := []string{}
+
+			// check the numbers in the upper row. Iterate until we find a number that starts after the current index + 1 because at
+			// that point we know that the number is not adjacent to the gear.
+			for j < len(prevMatches) && prevMatches[j][0] <= i+1 {
+				if prevMatches[j][1] > i-1 {
+					matches = append(matches, prev[prevMatches[j][0]:prevMatches[j][1]])
+				}
+				j++
+			}
+
+			for k < len(nextMatches) && nextMatches[k][0] <= i+1 {
+				if nextMatches[k][1] > i-1 {
+					matches = append(matches, next[nextMatches[k][0]:nextMatches[k][1]])
+				}
+				k++
+			}
+
+			// Not the most efficient solution
+
+			// matches in the current row prefix.
+			prevs := re.FindAllIndex([]byte(curr[0:i]), -1)
+			// We need to check if the last match ends at the current index.
+			if len(prevs) > 0 && prevs[len(prevs)-1][1] == i {
+				matches = append(matches, curr[prevs[len(prevs)-1][0]:prevs[len(prevs)-1][1]])
+			}
+
+			// matches in the current row suffix.
+			nexts := re.FindAllIndex([]byte(curr[i+1:]), -1)
+			// We need to check if the first match starts at index 0 in the suffix.
+			if len(nexts) > 0 && nexts[0][0] == 0 {
+				matches = append(matches, curr[i+1:i+1+nexts[0][1]])
+			}
+
+			if len(matches) == 2 {
+				num1, err1 := strconv.Atoi(matches[0])
+				num2, err2 := strconv.Atoi(matches[1])
+				if err1 != nil || err2 != nil {
+					log.Fatal("Error converting string to integer")
+				}
+				result += num1 * num2
+			}
+
 		}
 	}
 
@@ -86,23 +153,28 @@ func main() {
 	scanner := bufio.NewScanner(inputFile)
 
 	var prev, curr, next string
-	var result int
+	var partsSum int
+	var gearSum int
 
 	for scanner.Scan() {
 		if prev == "" {
 			prev = scanner.Text()
 		} else if curr == "" {
 			curr = scanner.Text()
-			result += processLines("", prev, curr)
+			partsSum += getPartsFromLine("", prev, curr)
+			gearSum += getGearRatiosFromLine("", prev, curr)
 		} else {
 			next = scanner.Text()
-			result += processLines(prev, curr, next)
+			partsSum += getPartsFromLine(prev, curr, next)
+			gearSum += getGearRatiosFromLine(prev, curr, next)
 			prev = curr
 			curr = next
 		}
 	}
 
-	result += processLines(prev, curr, "")
+	partsSum += getPartsFromLine(prev, curr, "")
+	gearSum += getGearRatiosFromLine(prev, curr, "")
 
-	fmt.Println(result)
+	fmt.Println("Sum of parts: " + strconv.Itoa(partsSum))
+	fmt.Println("Sum of gear ratios: " + strconv.Itoa(gearSum))
 }
